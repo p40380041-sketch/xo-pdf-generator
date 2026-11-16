@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>PDF Article Generator</title>
+<link rel="stylesheet" href="style.css">
+<style>
+    :root{--bg:#f4f6fb;--card:#fff;--tx:#1b2333;--mut:#667085;--bd:#dfe3ec;--ac:#2f5bea;--ac2:#1e40c8;--sh:0 4px 18px rgba(20,30,60,.07)}
+:root[data-theme=dark]{--bg:#0f1420;--card:#171e2e;--tx:#e8ecf5;--mut:#98a2b8;--bd:#2a3349;--ac:#5b84ff;--ac2:#7b9bff;--sh:none}
+*{box-sizing:border-box}
+body{margin:0;font:15px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--tx)}
+.top{display:flex;justify-content:space-between;align-items:center;padding:14px 24px;background:var(--card);border-bottom:1px solid var(--bd);position:sticky;top:0;z-index:5}
+h1{font-size:20px;margin:0}h2{font-size:16px;margin:0 0 12px}
+.grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:20px;max-width:1300px;margin:20px auto;padding:0 16px}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:14px;padding:18px;margin-bottom:20px;box-shadow:var(--sh)}
+.sticky{position:sticky;top:76px}
+label{display:block;font-size:13px;font-weight:600;margin-bottom:12px;color:var(--mut)}
+label small{font-weight:400}
+input,select,textarea{display:block;width:100%;margin-top:4px;padding:9px 11px;font:inherit;color:var(--tx);background:var(--bg);border:1px solid var(--bd);border-radius:9px;transition:border-color .15s,box-shadow .15s}
+input:focus,select:focus,textarea:focus{outline:0;border-color:var(--ac);box-shadow:0 0 0 3px color-mix(in srgb,var(--ac) 22%,transparent)}
+input[type=color]{padding:2px;height:38px}
+textarea{resize:vertical;font-family:ui-monospace,Consolas,monospace;font-size:14px}
+.row,.set{display:grid;grid-template-columns:1fr 1fr;gap:0 12px}
+.chk{display:flex;align-items:center;gap:8px;align-self:end}.chk input{width:auto;margin:0}
+.btns{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px}
+.btn{display:inline-block;width:auto;margin:0;padding:9px 14px;font:600 14px inherit;font-family:inherit;color:var(--tx);background:var(--card);border:1px solid var(--bd);border-radius:9px;cursor:pointer;transition:transform .12s,background .15s}
+.btn:hover{transform:translateY(-1px);border-color:var(--ac)}
+.btn.primary{background:var(--ac);border-color:var(--ac);color:#fff}.btn.primary:hover{background:var(--ac2)}
+.btn.ghost{border:0;background:transparent;font-size:18px}
+button:disabled{opacity:.5;cursor:wait}
+#pv{width:100%;height:72vh;min-height:420px;border:1px solid var(--bd);border-radius:10px;background:#888}
+#list{list-style:none;margin:0 0 10px;padding:0}
+#list li{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--bd);border-radius:9px;margin-bottom:6px}
+#list li.on{border-color:var(--ac);background:color-mix(in srgb,var(--ac) 9%,transparent)}
+#list .t{flex:1;cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#list button{border:0;background:none;color:var(--tx);cursor:pointer;font-size:15px;padding:3px 6px;border-radius:6px}
+#list button:hover{background:var(--bd)}
+#busy{position:fixed;inset:0;display:flex;flex-direction:column;gap:12px;align-items:center;justify-content:center;background:rgba(10,15,30,.6);color:#fff;z-index:20;font-weight:600}
+#busy[hidden]{display:none}
+.spin{width:38px;height:38px;border:4px solid #fff5;border-top-color:#fff;border-radius:50%;animation:s .8s linear infinite}
+@keyframes s{to{transform:rotate(360deg)}}
+#toast{position:fixed;left:50%;bottom:22px;transform:translate(-50%,30px);padding:11px 18px;border-radius:10px;background:#16a34a;color:#fff;font-weight:600;opacity:0;pointer-events:none;transition:.25s;z-index:30;max-width:90vw}
+#toast.show{opacity:1;transform:translate(-50%,0)}#toast.err{background:#dc2626}
+@media(max-width:900px){.grid{grid-template-columns:1fr}.sticky{position:static}#pv{height:60vh}}
+@media(max-width:480px){.row,.set{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<header class="top"><h1>PDF Article Generator</h1><button id="theme" class="btn ghost" title="Light / dark mode">🌓</button></header>
+<main class="grid">
+<section>
+  <div class="card">
+    <h2>Article</h2>
+    <label>PDF Title<input id="title" autocomplete="off"></label>
+    <label>Subtitle (optional)<input id="subtitle"></label>
+    <div class="row"><label>Author (optional)<input id="author"></label><label>Date (optional)<input id="date" type="date"></label></div>
+    <label>Content <small>Use # / ## / ### headings, **bold**, *italic*, "- " bullets, "1. " numbered lists, [text](url)</small><textarea id="content" rows="14"></textarea></label>
+    <label>FAQ (optional) <small>Start each question with "Q:" (or "P:") and each answer with "A:" (or "R:")</small><textarea id="faq" rows="6"></textarea></label>
+    <div class="btns">
+      <button class="btn" id="b-prev">Update Preview</button>
+      <button class="btn primary" id="b-dl">Download PDF</button>
+      <button class="btn" id="b-draft">Save Draft</button>
+      <button class="btn" id="b-reset">Reset Editor</button>
+      <label class="btn">Import TXT<input id="b-imp" type="file" accept=".txt,text/plain" hidden></label>
+      <button class="btn" id="b-exp">Export TXT</button>
+    </div>
+  </div>
+  <div class="card">
+    <h2>Design</h2>
+    <div class="set">
+      <label>Template<select id="s-tpl"><option value="modern">Modern Professional</option><option value="minimal">Clean Minimal</option><option value="magazine">Magazine Style</option><option value="business">Business Report</option><option value="travel">Travel Guide</option><option value="faq">FAQ Document</option></select></label>
+      <label>Page size<select id="s-page"><option value="a4">A4</option><option value="letter">Letter</option><option value="legal">Legal</option></select></label>
+      <label>Font<select id="s-font"><option value="helvetica">Sans (Helvetica)</option><option value="times">Serif (Times)</option><option value="courier">Mono (Courier)</option></select></label>
+      <label>Font size (pt)<input id="s-size" type="number" min="8" max="18" step="0.5"></label>
+      <label>Heading size (pt)<input id="s-hsize" type="number" min="12" max="36"></label>
+      <label>Line spacing<input id="s-lh" type="number" min="1" max="2.2" step="0.05"></label>
+      <label>Paragraph gap (mm)<input id="s-ps" type="number" min="0" max="20"></label>
+      <label>Margins (mm, min 15)<input id="s-m" type="number" min="15" max="40"></label>
+      <label>Text color<input id="s-color" type="color"></label>
+      <label>Heading color<input id="s-hcolor" type="color"></label>
+      <label>Background<input id="s-bg" type="color"></label>
+      <label>Header text<input id="s-header"></label>
+      <label>Footer text<input id="s-footer"></label>
+      <label class="chk"><input id="s-pn" type="checkbox"> Page numbers</label>
+    </div>
+  </div>
+</section>
+<section>
+  <div class="card sticky"><h2>Live preview <small>(the real PDF)</small></h2><iframe id="pv" title="PDF preview"></iframe></div>
+  <div class="card">
+    <h2>Articles</h2>
+    <ul id="list"></ul>
+    <div class="btns">
+      <button class="btn" id="b-add">+ Add article</button>
+      <button class="btn primary" id="b-all">Download all (one PDF)</button>
+      <button class="btn" id="b-clear">Clear all</button>
+    </div>
+  </div>
+</section>
+</main>
+<div id="busy" hidden><div class="spin"></div>Generating PDF…</div>
+<div id="toast" role="status"></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script >
+    'use strict';
+const $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAll(s)];
+const rgb = h => [1, 3, 5].map(i => parseInt(h.substr(i, 2), 16));
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const blank = () => ({ title: '', subtitle: '', author: '', date: '', content: '', faq: '' });
+const FIELDS = Object.keys(blank());
+const PRESETS = {
+  modern:   { font: 'helvetica', size: 11,   hsize: 20, color: '#222222', hcolor: '#1d4ed8', bg: '#ffffff', lh: 1.45, ps: 6, m: 20 },
+  minimal:  { font: 'helvetica', size: 11,   hsize: 18, color: '#333333', hcolor: '#111111', bg: '#ffffff', lh: 1.5,  ps: 8, m: 25 },
+  magazine: { font: 'times',     size: 12,   hsize: 26, color: '#1f1f1f', hcolor: '#b91c1c', bg: '#fffdf7', lh: 1.4,  ps: 6, m: 18 },
+  business: { font: 'helvetica', size: 10.5, hsize: 18, color: '#1f2937', hcolor: '#0f3d63', bg: '#ffffff', lh: 1.4,  ps: 5, m: 22 },
+  travel:   { font: 'times',     size: 12,   hsize: 22, color: '#263238', hcolor: '#0f766e', bg: '#f0fdfa', lh: 1.5,  ps: 7, m: 20 },
+  faq:      { font: 'helvetica', size: 11,   hsize: 20, color: '#222222', hcolor: '#7c3aed', bg: '#ffffff', lh: 1.4,  ps: 5, m: 20 }
+};
+const defaults = () => ({ tpl: 'modern', page: 'a4', header: '', footer: '', pn: true, ...PRESETS.modern });
+
+let st;
+try { st = JSON.parse(localStorage.getItem('pdfgen')); } catch (e) { st = null; }
+if (!st || !st.arts || !st.arts.length) st = { arts: [blank()], cur: 0, set: defaults() };
+st.set = { ...defaults(), ...st.set };
+st.cur = Math.min(st.cur || 0, st.arts.length - 1);
+
+let busy = false, oldUrl = null, timer = null;
+const save = () => { try { localStorage.setItem('pdfgen', JSON.stringify(st)); return true; } catch (e) { return false; } };
+const toast = (msg, err) => {
+  const t = $('#toast'); t.textContent = msg; t.className = 'show' + (err ? ' err' : '');
+  clearTimeout(t._t); t._t = setTimeout(() => t.className = '', 3200);
+};
+const isEmpty = a => FIELDS.every(f => !String(a[f] || '').trim());
+
+/* ---------- PDF engine ---------- */
+function runs(s) {
+  const out = [], re = /\*\*(.+?)\*\*|\*(.+?)\*|\[(.+?)\]\((.+?)\)/g; let l = 0, m;
+  while ((m = re.exec(s))) {
+    if (m.index > l) out.push({ t: s.slice(l, m.index) });
+    if (m[1]) out.push({ t: m[1], b: 1 }); else if (m[2]) out.push({ t: m[2], i: 1 }); else out.push({ t: m[3], u: m[4] });
+    l = re.lastIndex;
+  }
+  if (l < s.length) out.push({ t: s.slice(l) });
+  return out;
+}
+
+function build(list) {
+  const S = st.set, { jsPDF } = window.jspdf, PT = 0.3528;
+  const doc = new jsPDF({ unit: 'mm', format: S.page, orientation: 'portrait' });
+  const W = doc.internal.pageSize.getWidth(), H = doc.internal.pageSize.getHeight(), M = Math.max(S.m, 15);
+  let y = 0, first = true;
+  const col = h => doc.setTextColor(...rgb(h));
+  const newPage = () => {
+    if (!first) doc.addPage(); first = false;
+    doc.setFillColor(...rgb(S.bg)); doc.rect(0, 0, W, H, 'F'); y = M;
+  };
+  const need = h => { if (y + h > H - M) newPage(); };
+
+  // Characters outside the PDF's built-in fonts (emoji, fancy Unicode letters, Hindi...) are drawn
+  // by the browser onto a canvas and inserted as images, so they never turn into garbage.
+  const UNI = /([^\u0000-\u00ff\u2013\u2014\u2018-\u201e\u2022\u2026\u20ac\u2122]+)/u;
+  const FAM = { helvetica: 'Arial, Helvetica, sans-serif', times: '"Times New Roman", Times, serif', courier: '"Courier New", monospace' };
+  const cvs = document.createElement('canvas'), cx = cvs.getContext('2d'), K = 4;
+  const cfont = (t, sz) => { cx.font = (t.i ? 'italic ' : '') + (t.b ? 'bold ' : '') + (sz * K) + 'px ' + FAM[S.font]; };
+  const imgW = (t, sz) => { cfont(t, sz); return cx.measureText(t.w).width / K * PT; };
+  const drawImg = (t, sz, x, base, color) => {
+    cfont(t, sz);
+    const w = Math.ceil(cx.measureText(t.w).width) + 2;
+    cvs.width = w; cvs.height = Math.ceil(sz * K * 1.7);
+    cfont(t, sz); cx.fillStyle = color; cx.textBaseline = 'alphabetic'; cx.fillText(t.w, 1, sz * K * 1.3);
+    doc.addImage(cvs.toDataURL('image/png'), 'PNG', x, base - sz * 1.3 * PT, cvs.width / K * PT, cvs.height / K * PT);
+  };
+
+  const para = (text, o = {}) => {
+    const sz = o.sz || S.size, lh = sz * PT * S.lh, x0 = M + (o.ind || 0), mx = W - M;
+    doc.setFontSize(sz);
+    const toks = [];
+    runs(text).forEach(r => r.t.split(/(\s+)/).forEach(w => {
+      if (w) w.split(UNI).forEach((s, k) => { if (s) toks.push({ w: s, img: k % 2 === 1, b: r.b || o.b, i: r.i || o.i, u: r.u }); });
+    }));
+    need(lh + (o.keep || 0));
+    let x = x0;
+    if (o.bul) { doc.setFont(S.font, 'normal'); col(S.color); doc.text(o.bul, x0 - (o.bw || 5), y + lh * .75); }
+    for (const t of toks) {
+      doc.setFont(S.font, t.b && t.i ? 'bolditalic' : t.b ? 'bold' : t.i ? 'italic' : 'normal');
+      if (!t.w.trim()) { if (x > x0) x += doc.getTextWidth(t.w); continue; }
+      const parts = !t.img && doc.getTextWidth(t.w) > mx - x0 ? doc.splitTextToSize(t.w, mx - x0) : [t.w];
+      parts.forEach((p, k) => {
+        const pw = t.img ? imgW(t, sz) : doc.getTextWidth(p);
+        if (k || (x + pw > mx && x > x0)) { y += lh; need(lh); x = x0; }
+        const c = t.u ? '#1d4ed8' : (o.c || S.color); col(c);
+        if (t.img) drawImg(t, sz, x, y + lh * .75, c); else doc.text(p, x, y + lh * .75);
+        if (t.u) doc.link(x, y, pw, lh, { url: t.u });
+        x += pw;
+      });
+    }
+    y += lh + (o.after ?? S.ps);
+  };
+
+  const body = text => {
+    let buf = []; const flush = () => { if (buf.length) para(buf.join(' ')); buf = []; };
+    String(text || '').split(/\r?\n/).forEach(l => {
+      let m;
+      if (!l.trim()) return flush();
+      if ((m = l.match(/^(#{1,3})\s+(.*)/))) { flush(); para(m[2], { sz: S.hsize * (m[1].length > 2 ? .65 : .85), b: 1, c: S.hcolor, keep: 14, after: 2 }); }
+      else if ((m = l.match(/^\s*[-*•]\s+(.*)/))) { flush(); para(m[1], { bul: '•', ind: 6, bw: 4, after: 1.5 }); }
+      else if ((m = l.match(/^\s*(\d+)[.)]\s+(.*)/))) { flush(); para(m[2], { bul: m[1] + '.', ind: 7, bw: 6, after: 1.5 }); }
+      else buf.push(l.trim());
+    });
+    flush();
+  };
+
+  const faq = t => {
+    if (!t || !t.trim()) return;
+    const items = []; let cur = null, part = 'a';
+    t.split(/\r?\n/).forEach(l => {
+      let m;
+      if ((m = l.match(/^\s*(?:Q|P|Pregunta)\s*[:.)]\s*(.*)/i))) { cur = { q: m[1], a: '' }; items.push(cur); part = 'q'; }
+      else if (cur && (m = l.match(/^\s*(?:A|R|Respuesta)\s*[:.)]\s*(.*)/i))) { cur.a = m[1]; part = 'a'; }
+      else if (l.trim()) {
+        if (!cur) { cur = { q: '', a: '' }; items.push(cur); part = 'a'; }
+        cur[part] += (cur[part] ? ' ' : '') + l.trim();
+      }
+    });
+    y += 2; para('FAQ', { sz: S.hsize * .85, b: 1, c: S.hcolor, keep: 20, after: 3 });
+    items.forEach((it, i) => {
+      if (it.q) para((i + 1) + '. ' + it.q, { b: 1, c: S.hcolor, keep: 14, after: 1 });
+      if (it.a) para(it.a, { ind: 5, after: S.ps + 1 });
+    });
+  };
+
+  list.forEach(a => {
+    newPage();
+    if (a.title) para(a.title, { sz: S.hsize * 1.4, b: 1, c: S.hcolor, after: 2 });
+    if (a.subtitle) para(a.subtitle, { sz: S.size + 3, i: 1, c: '#666666', after: 2 });
+    const meta = [a.author, a.date].filter(Boolean).join('  •  ');
+    if (meta) para(meta, { sz: S.size - 1, c: '#777777', after: 2 });
+    if (a.title || a.subtitle || meta) {
+      need(4); doc.setDrawColor(...rgb(S.hcolor)); doc.setLineWidth(.4); doc.line(M, y, W - M, y); y += 5;
+    }
+    body(a.content); faq(a.faq);
+  });
+
+  const n = doc.getNumberOfPages();
+  for (let i = 1; i <= n; i++) {
+    doc.setPage(i); doc.setFontSize(8); doc.setFont(S.font, 'normal'); col('#888888');
+    if (S.header) doc.text(S.header, M, 9);
+    if (S.footer) doc.text(S.footer, M, H - 8);
+    if (S.pn) doc.text(i + ' / ' + n, W - M, H - 8, { align: 'right' });
+  }
+  return doc;
+}
+
+/* ---------- actions ---------- */
+const slug = s => (s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^\w]+/g, '-').replace(/^-|-$/g, '').toLowerCase() || 'article';
+const setBusy = b => { busy = b; $('#busy').hidden = !b; $$('button').forEach(x => x.disabled = b); };
+
+function download(list, name) {
+  if (busy) return;
+  if (!window.jspdf) return toast('PDF library failed to load. Check your internet connection and reload.', 1);
+  if (list.every(isEmpty)) return toast('Nothing to export: the article is empty.', 1);
+  setBusy(true);
+  setTimeout(() => {
+    try {
+      const doc = build(list);
+      if (doc.output('blob').size < 800) throw new Error('The generated PDF is empty.');
+      doc.save(name + '.pdf'); toast('PDF downloaded');
+    } catch (e) { console.error(e); toast('PDF error: ' + e.message, 1); }
+    finally { setBusy(false); }
+  }, 50);
+}
+
+function preview() {
+  if (!window.jspdf) return toast('PDF library failed to load. Check your internet connection and reload.', 1);
+  try {
+    const url = URL.createObjectURL(build([st.arts[st.cur]]).output('blob'));
+    if (oldUrl) URL.revokeObjectURL(oldUrl);
+    oldUrl = url; $('#pv').src = url + '#toolbar=0&navpanes=0';
+  } catch (e) { console.error(e); toast('Preview error: ' + e.message, 1); }
+}
+const sched = () => { clearTimeout(timer); timer = setTimeout(preview, 700); };
+const change = () => { save(); sched(); };
+
+/* ---------- UI ---------- */
+function loadEditor() { FIELDS.forEach(f => $('#' + f).value = st.arts[st.cur][f]); renderList(); }
+function loadSettings() {
+  for (const k in st.set) { const el = $('#s-' + k); if (el) el.type === 'checkbox' ? el.checked = st.set[k] : el.value = st.set[k]; }
+}
+function renderList() {
+  $('#list').innerHTML = st.arts.map((a, i) =>
+    `<li class="${i === st.cur ? 'on' : ''}"><span class="t" data-a="sel" data-i="${i}">${i + 1}. ${esc(a.title || 'Untitled')}</span>` +
+    `<span><button data-a="up" data-i="${i}" title="Move up">↑</button><button data-a="down" data-i="${i}" title="Move down">↓</button>` +
+    `<button data-a="dl" data-i="${i}" title="Download this PDF">⬇</button><button data-a="del" data-i="${i}" title="Delete">✕</button></span></li>`).join('');
+}
+const dl1 = a => download([a], slug(a.title));
+
+FIELDS.forEach(f => $('#' + f).addEventListener('input', e => {
+  st.arts[st.cur][f] = e.target.value; if (f === 'title') renderList(); change();
+}));
+$$('[id^=s-]').forEach(el => el.addEventListener('input', () => {
+  const k = el.id.slice(2);
+  if (k === 'tpl') { Object.assign(st.set, PRESETS[el.value], { tpl: el.value }); loadSettings(); }
+  else st.set[k] = el.type === 'checkbox' ? el.checked : el.type === 'number' ? (parseFloat(el.value) || 0) : el.value;
+  change();
+}));
+
+$('#list').addEventListener('click', e => {
+  const b = e.target.closest('[data-a]'); if (!b) return;
+  const i = +b.dataset.i, A = st.arts, sw = j => { [A[i], A[j]] = [A[j], A[i]]; if (st.cur === i) st.cur = j; else if (st.cur === j) st.cur = i; };
+  switch (b.dataset.a) {
+    case 'sel': st.cur = i; loadEditor(); break;
+    case 'up': if (i > 0) sw(i - 1); break;
+    case 'down': if (i < A.length - 1) sw(i + 1); break;
+    case 'dl': return dl1(A[i]);
+    case 'del':
+      if (!confirm('Delete this article?')) return;
+      if (A.length === 1) A[0] = blank(); else { A.splice(i, 1); st.cur = Math.min(st.cur, A.length - 1); }
+      break;
+  }
+  loadEditor(); change(); if (b.dataset.a !== 'sel') preview();
+});
+
+$('#b-prev').onclick = preview;
+$('#b-dl').onclick = () => dl1(st.arts[st.cur]);
+$('#b-all').onclick = () => download(st.arts.filter(a => !isEmpty(a)), 'articles');
+$('#b-draft').onclick = () => toast(save() ? 'Draft saved in this browser' : 'Could not save (storage unavailable)', !save());
+$('#b-reset').onclick = () => { if (confirm('Clear the current article?')) { st.arts[st.cur] = blank(); loadEditor(); change(); preview(); } };
+$('#b-add').onclick = () => { st.arts.push(blank()); st.cur = st.arts.length - 1; loadEditor(); change(); preview(); };
+$('#b-clear').onclick = () => { if (confirm('Delete ALL articles?')) { st.arts = [blank()]; st.cur = 0; loadEditor(); change(); preview(); } };
+$('#b-exp').onclick = () => {
+  const a = st.arts[st.cur], txt = [a.title, a.subtitle, [a.author, a.date].filter(Boolean).join(' - '), '', a.content, a.faq ? '\nFAQ\n' + a.faq : ''].join('\n');
+  const l = document.createElement('a'); l.href = URL.createObjectURL(new Blob([txt], { type: 'text/plain;charset=utf-8' }));
+  l.download = slug(a.title) + '.txt'; l.click(); setTimeout(() => URL.revokeObjectURL(l.href), 1000);
+};
+$('#b-imp').onchange = e => {
+  const f = e.target.files[0]; if (!f) return;
+  const r = new FileReader();
+  r.onload = () => {
+    const a = st.arts[st.cur]; a.content = String(r.result);
+    if (!a.title) a.title = f.name.replace(/\.[^.]+$/, '');
+    loadEditor(); change(); toast('File imported');
+  };
+  r.onerror = () => toast('Could not read the file', 1);
+  r.readAsText(f, 'utf-8'); e.target.value = '';
+};
+$('#theme').onclick = () => {
+  const d = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
+  document.documentElement.dataset.theme = d; try { localStorage.setItem('pdfgen-theme', d); } catch (e) {}
+};
+try { document.documentElement.dataset.theme = localStorage.getItem('pdfgen-theme') || (matchMedia('(prefers-color-scheme:dark)').matches ? 'dark' : 'light'); } catch (e) {}
+
+loadSettings(); loadEditor();
+window.addEventListener('load', () => window.jspdf ? preview() : toast('PDF library failed to load. Check your internet connection and reload.', 1));
+</script>
+</body>
+</html>
